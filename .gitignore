@@ -1,0 +1,37 @@
+# .NET 7
+*.log
+*.vs/
+*.obj/
+*.bin/
+*.dll
+*.exe
+*.pdb
+*.user
+*.psess
+*.cache
+*.tmp
+*.dbmdl
+*.jfm
+*.suo
+*.userosscache
+*.userprefs
+*.vsp
+*.vspx
+*.sln.docstates
+**/bin/
+**/obj/
+**/TestResults/
+*.dotCover
+*.dotSettings
+.coverage
+.coverage*
+.nuget/
+*.nupkg
+*.pfx
+*.snk
+*.cache
+*.DS_Store
+*.vscode/
+*.vscode/
+.vs/
+# End of .NET 7
