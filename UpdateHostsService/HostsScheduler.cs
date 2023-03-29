@@ -27,32 +27,53 @@ namespace UpdateHostsService
         {
             var schedulerFactory = new StdSchedulerFactory();
             var scheduler = await schedulerFactory.GetScheduler();
-            scheduler.JobFactory = _serviceScopeFactory.CreateScope().ServiceProvider.GetRequiredService<IJobFactory>(); // Set the custom JobFactory
+            scheduler.JobFactory = _serviceScopeFactory.CreateScope().ServiceProvider.GetRequiredService<IJobFactory>();
             await scheduler.Start();
 
             var sections = _configuration.GetSection("Sections").Get<List<HostsSection>>();
 
             foreach (var section in sections)
             {
-                var job = JobBuilder.Create<HostsUpdaterJob>()
-                    .WithIdentity($"UpdateHostsJob-{section.Name}")
-                    .UsingJobData(new JobDataMap { { "section", section } })
-                    .Build();
+                if (Uri.IsWellFormedUriString(section.Url, UriKind.Absolute) || (File.Exists(section.Url) && section.IntervalInSeconds > 0))
+                {
+                    var job = JobBuilder.Create<HostsUpdaterJob>()
+                        .WithIdentity($"UpdateHostsJob-{section.Name}")
+                        .UsingJobData(new JobDataMap { { "section", section } })
+                        .Build();
 
-                var trigger = TriggerBuilder.Create()
-                    .WithIdentity($"UpdateHostsTrigger-{section.Name}")
-                    .StartNow()
-                    .WithSimpleSchedule(x => x
-                        .WithIntervalInSeconds(section.IntervalInSeconds)
-                        .RepeatForever())
-                    .Build();
+                    var trigger = TriggerBuilder.Create()
+                        .WithIdentity($"UpdateHostsTrigger-{section.Name}")
+                        .StartAt(DateTime.UtcNow)
+                        .WithSimpleSchedule(x => x
+                            .WithIntervalInSeconds(section.IntervalInSeconds)
+                            .RepeatForever())
+                        .Build();
 
-                await scheduler.ScheduleJob(job, trigger);
-                var jobDetail = scheduler.GetJobDetail(job.Key);
-                var triggers = await scheduler.GetTriggersOfJob(job.Key);
-                var nextFireTimeUtc = triggers.FirstOrDefault()?.GetNextFireTimeUtc();
+                    await scheduler.ScheduleJob(job, trigger);
+                }
+                else if (File.Exists(section.Url) && section.IntervalInSeconds <= 0)
+                {
+                    var fileSystemWatcher = new FileSystemWatcher(Path.GetDirectoryName(section.Url), Path.GetFileName(section.Url))
+                    {
+                        NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName
+                    };
+
+                    fileSystemWatcher.Changed += async (sender, e) =>
+                    {
+                        var job = JobBuilder.Create<HostsUpdaterJob>()
+                            .WithIdentity($"UpdateHostsJob-{section.Name}")
+                            .UsingJobData(new JobDataMap { { "section", section } })
+                            .Build();
+
+                        await scheduler.TriggerJob(job.Key);
+                    };
+
+                    fileSystemWatcher.EnableRaisingEvents = true;
+                }
             }
         }
+
+
     }
 
 }

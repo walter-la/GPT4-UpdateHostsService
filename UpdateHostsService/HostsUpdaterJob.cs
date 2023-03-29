@@ -130,13 +130,4 @@
         }
     }
 
-    public class HostsSection
-    {
-        public string Name { get; set; }
-        public string Url { get; set; }
-        public int IntervalInSeconds { get; set; }
-    }
-
-
-
 }
