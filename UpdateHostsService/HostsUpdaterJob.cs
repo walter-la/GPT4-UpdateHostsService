@@ -5,6 +5,7 @@
     using System.Configuration;
     using System.IO;
     using System.Net.Http;
+    using System.Text;
     using System.Text.RegularExpressions;
     using System.Threading.Tasks;
     using Microsoft.Extensions.Configuration;
@@ -17,12 +18,14 @@
         private readonly ILogger<HostsUpdaterJob> _logger;
         private readonly IConfiguration _configuration;
         private readonly HttpClient _httpClient;
+        private readonly List<string> _domainWhitelist;
 
         public HostsUpdaterJob(ILogger<HostsUpdaterJob> logger, IConfiguration configuration)
         {
             _logger = logger;
             _configuration = configuration;
             _httpClient = new HttpClient();
+            _domainWhitelist = _configuration.GetSection("DomainWhitelist").Get<List<string>>();
         }
 
         public async Task Execute(IJobExecutionContext context)
@@ -35,7 +38,7 @@
                 var hostsPath = @"C:\Windows\System32\drivers\etc\hosts";
                 var hostsContent = ReadHostsFileWithRetry(hostsPath);
 
-                var sectionContent = GetSectionContent(section);
+                var sectionContent = await GetSectionContent(section.Url);
 
                 if (string.IsNullOrEmpty(sectionContent))
                 {
@@ -96,18 +99,39 @@
             }
         }
 
-        private string GetSectionContent(HostsSection section)
+        private async Task<string> GetSectionContent(string url)
         {
-            if (Uri.IsWellFormedUriString(section.Url, UriKind.Absolute))
+            var content = string.Empty;
+
+            if (Uri.IsWellFormedUriString(url, UriKind.Absolute))
             {
-                return _httpClient.GetStringAsync(section.Url).Result;
+                content = await _httpClient.GetStringAsync(url);
             }
-            else if (File.Exists(section.Url))
+            else if (File.Exists(url))
             {
-                return File.ReadAllText(section.Url);
+                content = File.ReadAllText(url);
+            }
+            else
+            {
+                _logger.LogError("Invalid URL or file path: {Url}", url);
+                return content;
             }
 
-            return string.Empty;
+            var filteredContent = new StringBuilder();
+
+            using (var reader = new StringReader(content))
+            {
+                string line;
+                while ((line = reader.ReadLine()) != null)
+                {
+                    if (!_domainWhitelist.Any(domain => line.Contains(domain)))
+                    {
+                        filteredContent.AppendLine(line);
+                    }
+                }
+            }
+
+            return filteredContent.ToString();
         }
 
         private string ReplaceOrUpdateSection(string hostsContent, string sectionName, string sectionContent)
