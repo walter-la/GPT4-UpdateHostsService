@@ -1,18 +1,36 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Quartz.Spi;
 
 namespace UpdateHostsService
 {
     public class Program
     {
-        public static void Main(string[] args)
+        public static async Task Main(string[] args)
         {
-            CreateHostBuilder(args).Build().Run();
+            var host = CreateHostBuilder(args).Build();
+
+            using (var scope = host.Services.CreateScope())
+            {
+                var services = scope.ServiceProvider;
+                var logger = services.GetRequiredService<ILogger<Program>>();
+
+                try
+                {
+                    var hostsScheduler = services.GetRequiredService<HostsScheduler>();
+                    await hostsScheduler.ScheduleJobs();
+                    logger.LogInformation("HostsScheduler started successfully.");
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "An error occurred while starting the HostsScheduler.");
+                }
+            }
+
+            await host.RunAsync();
         }
 
         public static IHostBuilder CreateHostBuilder(string[] args) =>
@@ -20,7 +38,12 @@ namespace UpdateHostsService
                 .UseWindowsService()
                 .ConfigureServices((hostContext, services) =>
                 {
-                    services.AddHostedService<Worker>();
+                    services.AddSingleton<HostsScheduler>();
+                    services.AddSingleton<HostsUpdaterJob>();
+                    services.AddSingleton<IJobFactory, ServiceProviderJobFactory>();
                 });
+
+
     }
 }
+
