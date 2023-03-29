@@ -59,14 +59,28 @@ namespace UpdateHostsService
                         NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName
                     };
 
-                    fileSystemWatcher.Changed += async (sender, e) =>
+                    var jobKey = new JobKey($"UpdateHostsJob-{section.Name}");
+
+                    // 檢查工作是否已經存在
+                    if (!await scheduler.CheckExists(jobKey))
                     {
+                        // 如果工作不存在，創建並添加到調度器中
                         var job = JobBuilder.Create<HostsUpdaterJob>()
-                            .WithIdentity($"UpdateHostsJob-{section.Name}")
+                            .WithIdentity(jobKey)
                             .UsingJobData(new JobDataMap { { "section", section } })
+                            .StoreDurably() // 使工作持久化，即使沒有觸發器也能保存
                             .Build();
 
-                        await scheduler.TriggerJob(job.Key);
+                        await scheduler.AddJob(job, true); // true 參數表示如果存在相同的 JobKey，則替換現有的工作
+                    }
+
+                    // 觸發工作
+                    await scheduler.TriggerJob(jobKey);
+
+                    fileSystemWatcher.Changed += async (sender, e) =>
+                    {
+                        // 觸發工作
+                        await scheduler.TriggerJob(jobKey);
                     };
 
                     fileSystemWatcher.EnableRaisingEvents = true;
