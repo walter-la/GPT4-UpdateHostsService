@@ -9,11 +9,16 @@ UpdateHostsService 是一個基於 .NET 7 的 Windows 服務，用於自動更�
 - 自動更新 hosts 文件中的指定區段
 - 支持從遠程 URL 或本地文件路徑獲取內容
 - 使用 appsettings.json 配置區段名稱和內容源
+- 將每個 `HostsSection` 獨立作為一個 Quartz 排程任務，以支持不同的更新時間間隔。
+- 針對本地文件路徑，如果 `section.IntervalInSeconds` 小於等於 0，則使用 `FileSystemWatcher` 監聽文件更改，並在文件發生更改時立即執行更新。
+- 刪除 `hosts` 文件中不再存在於 `appsettings.json` 的 "Sections" 列表中的部分。
+- 在 `appsettings.json` 中添加網域名稱白名單，並在更新 `hosts` 文件時過濾掉與白名單匹配的網域名稱。
+
 
 ## 發佈
 
 ```sh
-dotnet publish --configuration Release --output ./publish
+dotnet publish --configuration Release
 ```
 
 ## 安裝
