@@ -21,6 +21,7 @@ namespace UpdateHostsService
                 try
                 {
                     var hostsScheduler = services.GetRequiredService<HostsScheduler>();
+                    hostsScheduler.RemoveUnusedSectionsFromHostsFile();
                     await hostsScheduler.ScheduleJobs();
                     logger.LogInformation("HostsScheduler started successfully.");
                 }

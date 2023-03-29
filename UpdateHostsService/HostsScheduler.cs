@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using static Quartz.Logging.OperationName;
 using Microsoft.Extensions.DependencyInjection;
 using Quartz.Spi;
+using System.Text.RegularExpressions;
 
 namespace UpdateHostsService
 {
@@ -72,6 +73,34 @@ namespace UpdateHostsService
                 }
             }
         }
+
+        public void RemoveUnusedSectionsFromHostsFile()
+        {
+            var hostsPath = @"C:\Windows\System32\drivers\etc\hosts";
+            var hostsContent = File.ReadAllText(hostsPath);
+            var sections = _configuration.GetSection("Sections").Get<List<HostsSection>>();
+
+            var sectionRegex = new Regex(@"### begin (?<sectionName>.*?)\r?\n.*?\r?\n### end \1", RegexOptions.Singleline);
+            var matches = sectionRegex.Matches(hostsContent);
+
+            var updated = false;
+
+            foreach (Match match in matches)
+            {
+                var sectionName = match.Groups["sectionName"].Value;
+                if (!sections.Any(s => s.Name == sectionName))
+                {
+                    hostsContent = hostsContent.Replace(match.Value, "");
+                    updated = true;
+                }
+            }
+
+            if (updated)
+            {
+                File.WriteAllText(hostsPath, hostsContent);
+            }
+        }
+
 
 
     }
